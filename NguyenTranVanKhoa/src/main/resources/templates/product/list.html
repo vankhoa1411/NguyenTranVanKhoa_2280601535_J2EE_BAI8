@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <meta charset="UTF-8">
+    <title>Danh Sách Sản Phẩm</title>
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+</head>
+<body class="bg-light">
+
+<!-- ── Navbar ──────────────────────────────────────────────────────── -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+    <div class="container">
+        <a class="navbar-brand fw-bold" href="/products">
+            <i class="bi bi-shop"></i> Shop
+        </a>
+        <div class="d-flex align-items-center gap-3">
+            <!-- Badge giỏ hàng -->
+            <a href="/cart" class="btn btn-outline-light position-relative">
+                <i class="bi bi-cart3"></i> Giỏ hàng
+                <span th:if="${cartCount > 0}"
+                      class="position-absolute top-0 start-100 translate-middle
+                             badge rounded-pill bg-danger"
+                      th:text="${cartCount}"></span>
+            </a>
+            <!-- Nút thêm (chỉ ADMIN) -->
+            <a sec:authorize="hasRole('ROLE_ADMIN')"
+               href="/products/add" class="btn btn-warning fw-semibold">
+                <i class="bi bi-plus-lg"></i> Thêm SP
+            </a>
+            <!-- Đăng xuất -->
+            <a href="/logout" class="btn btn-outline-light">
+                <i class="bi bi-box-arrow-right"></i> Đăng xuất
+            </a>
+        </div>
+    </div>
+</nav>
+
+<div class="container">
+
+    <!-- ── Flash message ──────────────────────────────────────────── -->
+    <div th:if="${success}" class="alert alert-success alert-dismissible fade show" role="alert">
+        <span th:text="${success}"></span>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         Câu 1 – Tìm kiếm theo tên  |  Câu 4 – Lọc theo Category
+         ═══════════════════════════════════════════════════════════ -->
+    <form th:action="@{/products}" method="get" class="row g-2 mb-4 align-items-end">
+
+        <!-- Câu 1: input keyword -->
+        <div class="col-md-5">
+            <label class="form-label fw-semibold">
+                <i class="bi bi-search"></i> Tìm theo tên sản phẩm
+            </label>
+            <input type="text" name="keyword" class="form-control"
+                   placeholder="Nhập tên sản phẩm..."
+                   th:value="${keyword}">
+        </div>
+
+        <!-- Câu 4: dropdown category -->
+        <div class="col-md-3">
+            <label class="form-label fw-semibold">
+                <i class="bi bi-filter"></i> Danh mục
+            </label>
+            <select name="categoryId" class="form-select">
+                <option value="0">-- Tất cả danh mục --</option>
+                <option th:each="cat : ${categories}"
+                        th:value="${cat.id}"
+                        th:text="${cat.name}"
+                        th:selected="${cat.id == categoryId}">
+                </option>
+            </select>
+        </div>
+
+        <!-- Giữ lại trạng thái sort khi submit form -->
+        <input type="hidden" name="sortField" th:value="${sortField}">
+        <input type="hidden" name="sortDir"   th:value="${sortDir}">
+
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-primary w-100">
+                <i class="bi bi-search"></i> Tìm kiếm
+            </button>
+        </div>
+        <div class="col-md-2">
+            <a href="/products" class="btn btn-outline-secondary w-100">
+                <i class="bi bi-x-circle"></i> Xóa bộ lọc
+            </a>
+        </div>
+    </form>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         Câu 3 – Sắp xếp theo giá
+         ═══════════════════════════════════════════════════════════ -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <span class="text-muted">
+            Tìm thấy <strong th:text="${totalItems}"></strong> sản phẩm
+            <span th:if="${keyword != null and !keyword.isEmpty()}">
+                với từ khóa "<em th:text="${keyword}"></em>"
+            </span>
+        </span>
+
+        <div class="d-flex align-items-center gap-2">
+            <span class="fw-semibold small">Sắp xếp theo giá:</span>
+            <!-- Tăng dần -->
+            <a th:href="@{/products(keyword=${keyword},
+                                    categoryId=${categoryId},
+                                    sortField='price',
+                                    sortDir='asc',
+                                    page=0)}"
+               th:classappend="${sortField=='price' and sortDir=='asc'} ? 'active' : ''"
+               class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-sort-numeric-up"></i> Tăng dần
+            </a>
+            <!-- Giảm dần -->
+            <a th:href="@{/products(keyword=${keyword},
+                                    categoryId=${categoryId},
+                                    sortField='price',
+                                    sortDir='desc',
+                                    page=0)}"
+               th:classappend="${sortField=='price' and sortDir=='desc'} ? 'active' : ''"
+               class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-sort-numeric-down"></i> Giảm dần
+            </a>
+        </div>
+    </div>
+
+    <!-- ── Không có sản phẩm ──────────────────────────────────────── -->
+    <div th:if="${products.isEmpty()}" class="alert alert-warning text-center">
+        <i class="bi bi-emoji-frown"></i> Không tìm thấy sản phẩm nào.
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         Bảng sản phẩm
+         ═══════════════════════════════════════════════════════════ -->
+    <div class="card shadow-sm" th:unless="${products.isEmpty()}">
+        <div class="card-body p-0">
+            <table class="table table-hover mb-0">
+                <thead class="table-primary">
+                <tr>
+                    <th style="width:50px">#</th>
+                    <th style="width:80px">Ảnh</th>
+                    <th>Tên sản phẩm</th>
+                    <th>Danh mục</th>
+                    <th>Giá (VNĐ)</th>
+                    <!-- Câu 5: cột thêm vào giỏ -->
+                    <th style="width:160px">Thêm vào giỏ</th>
+                    <!-- Nút sửa/xóa chỉ ADMIN -->
+                    <th sec:authorize="hasRole('ROLE_ADMIN')" style="width:120px">Thao tác</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="p, stat : ${products}">
+                    <td th:text="${currentPage * 5 + stat.count}" class="text-muted small"></td>
+                    <td>
+                        <img th:if="${p.image != null and !p.image.isEmpty()}"
+                             th:src="@{'/assets/' + ${p.image}}"
+                             width="55" height="55"
+                             style="object-fit:cover;border-radius:6px;">
+                        <span th:if="${p.image == null or p.image.isEmpty()}"
+                              class="text-muted small">—</span>
+                    </td>
+                    <td class="fw-semibold align-middle" th:text="${p.name}"></td>
+                    <td class="align-middle">
+                        <span class="badge bg-secondary" th:text="${p.category.name}"></span>
+                    </td>
+                    <td class="align-middle fw-bold text-success"
+                        th:text="${#numbers.formatInteger(p.price, 0, 'COMMA')}"></td>
+
+                    <!-- ── Câu 5: Form thêm vào giỏ hàng ────────── -->
+                    <td class="align-middle">
+                        <form th:action="@{/products/cart/add}" method="post"
+                              class="d-flex gap-1">
+                            <input type="hidden" name="productId" th:value="${p.id}">
+                            <input type="number" name="quantity" value="1"
+                                   min="1" max="99"
+                                   class="form-control form-control-sm"
+                                   style="width:60px;">
+                            <button type="submit" class="btn btn-success btn-sm">
+                                <i class="bi bi-cart-plus"></i>
+                            </button>
+                        </form>
+                    </td>
+
+                    <!-- ── Nút sửa/xóa (chỉ ADMIN) ─────────────── -->
+                    <td class="align-middle" sec:authorize="hasRole('ROLE_ADMIN')">
+                        <a th:href="@{/products/edit/{id}(id=${p.id})}"
+                           class="btn btn-warning btn-sm">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                        <form th:action="@{/products/{id}(id=${p.id})}"
+                              method="post" style="display:inline"
+                              onsubmit="return confirm('Xóa sản phẩm này?')">
+                            <input type="hidden" name="_method" value="DELETE">
+                            <button type="submit" class="btn btn-danger btn-sm">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         Câu 2 – Phân trang Next / Previous
+         ═══════════════════════════════════════════════════════════ -->
+    <nav th:if="${totalPages > 1}" class="mt-4">
+        <ul class="pagination justify-content-center mb-1">
+
+            <!-- Previous -->
+            <li class="page-item" th:classappend="${currentPage == 0} ? 'disabled'">
+                <a class="page-link"
+                   th:href="@{/products(keyword=${keyword},
+                                        categoryId=${categoryId},
+                                        sortField=${sortField},
+                                        sortDir=${sortDir},
+                                        page=${currentPage - 1})}">
+                    <i class="bi bi-chevron-left"></i> Previous
+                </a>
+            </li>
+
+            <!-- Số trang -->
+            <li th:each="i : ${#numbers.sequence(0, totalPages - 1)}"
+                class="page-item"
+                th:classappend="${i == currentPage} ? 'active'">
+                <a class="page-link" th:text="${i + 1}"
+                   th:href="@{/products(keyword=${keyword},
+                                        categoryId=${categoryId},
+                                        sortField=${sortField},
+                                        sortDir=${sortDir},
+                                        page=${i})}">
+                </a>
+            </li>
+
+            <!-- Next -->
+            <li class="page-item"
+                th:classappend="${currentPage == totalPages - 1} ? 'disabled'">
+                <a class="page-link"
+                   th:href="@{/products(keyword=${keyword},
+                                        categoryId=${categoryId},
+                                        sortField=${sortField},
+                                        sortDir=${sortDir},
+                                        page=${currentPage + 1})}">
+                    Next <i class="bi bi-chevron-right"></i>
+                </a>
+            </li>
+        </ul>
+        <p class="text-center text-muted small">
+            Trang <strong th:text="${currentPage + 1}"></strong>
+            / <strong th:text="${totalPages}"></strong>
+            &nbsp;·&nbsp;
+            Tổng <strong th:text="${totalItems}"></strong> sản phẩm
+        </p>
+    </nav>
+
+</div><!-- /container -->
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
